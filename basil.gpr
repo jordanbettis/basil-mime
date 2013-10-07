@@ -1,0 +1,28 @@
+project Basil is
+
+  Version := "1";
+
+  for Languages use ("Ada");
+  for Library_Dir use "library";
+  for Library_Name use "basil";
+  for Library_Kind use "dynamic";
+  for Library_Version use "libbasil.so." & Version;
+
+  for Source_Dirs use ("./generated", "./source");
+  for Object_Dir use "build";
+
+  package Compiler is
+ 
+    for Default_Switches ("Ada")
+      use ("-gnatU", "-gnatVa", "-gnatyabefhikmnprsx");
+
+  end Compiler;
+
+  package Binder is
+   
+    for Default_Switches ("Ada")
+      use ("-E");
+
+  end Binder;
+
+end Basil;

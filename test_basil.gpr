@@ -1,0 +1,22 @@
+
+--  The test suite uses aunit. You must have aunit installed and
+--  specify a path to the library to run Basil's test suite.
+with "../AUnit/aunit.gpr";
+with "basil.gpr";
+
+project Test_Basil is
+
+  for Source_Dirs use ("test");
+  for Object_Dir use "test/build";
+  for Main use ("functional_tests");
+  for Exec_Dir use ".";
+
+  package Compiler is
+
+    for Default_Switches ("Ada")
+      use ("-gnatf");
+
+  end Compiler;
+
+
+end Test_Basil;

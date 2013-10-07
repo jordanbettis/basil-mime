@@ -1,0 +1,83 @@
+Time-stamp: <2008-07-21 13:05:19 jordanb>
+
+                    BASIL MESSAGE HANDLING LIBRARY
+
+The organization of this directory is as follows:
+
+./build/
+  is the directory into which the library is built.
+
+./documentation/
+  contains the documentation for the library. Currently it's just the
+  software specification. Eventually I'll write a separate user
+  manual. The Software Spec should still be worth reading to get an
+  overall picture of how the library is organized.
+
+./generated/
+  contains a set of source files that contain MIME type definitions
+  that are built automatically from the registry maintained by
+  IANA. The script to generate them is in ./tools/.
+
+./library/
+  is where the .ali and .so files are placed for dynamic linking. This
+  is the directory you need to install in your system's library path
+  after the library is successfully built.
+
+./source/ 
+  contains the source code for the library itself.
+
+./test/ 
+  contains the functional tests for the library. It has its own build
+  directory, ./tools/build/.
+
+./tools/
+  contains a set of tools useful for maintaining the library. See the
+  README file contained therein for more information.
+
+To build the library, run:
+
+gnatmake -Pbasil
+
+If you're using GPM for your program you can then use basil simply by
+'with'ing basil.gpr into your project. Otherwise you should be able to
+bind by using -I directives to gnatmake. Basil is setup by default to
+be linked dynamically. After you build your program it won't run
+unless ./library is copied into your system's LD path, or unless you
+add ./library to the path.
+
+You can do the latter under GNU (Linux) by doing:
+LD_LIBRARY_PATH=LD_LIBRARY_PATH:~/basil/library
+
+Replace '~/basil/library' with the actual path to the library
+directory on your system. I don't believe that is particularly
+portable off of Linux though.
+
+Basil includes a functional test suite. The suite can be built with
+the command:
+
+gnatmake -Ptest_basil
+
+If you haven't built the library yet, that command will build the
+library first, then the test suite. The product of building the test
+suite is a program named ./functional_tests. You can run it but you
+first need to resolve the LD path issue mentioned above.
+
+I have provided a script run_tests.sh. That script will first build
+the test suite (and build the library if it hasn't been built yet) and
+then run ./functional_tests with an environment variable set to tell
+the ldd about ./library.
+
+Please note that the test suite is built using aunit v.1.3. You need
+to first install aunit, and then edit test_basil.gpr to 'with' aunit's
+gpr file from the proper location (the default is ../AUnit/aunit.gpr,
+on the assumption that the basil source code and the aunit source code
+share the same parent directory). Aunit 1.3, which is the version on
+AdaCore's website at <https://libre.adacore.com/aunit/main.html>. The
+2.x version of aunit which comes with GNAT 2008 is not compatable with
+the test suite.
+
+BTW: Despite the fact that everything here assumes you're using gnat,
+I took some pains to make the library itself as vanilla Ada 2005 as
+possible. It should be portable even though the build process is not.
+
+ -- Jordan Bettis <jordanb@hafd.org>

@@ -1,0 +1,115 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%   softwarespec.sty v 0.2
+%
+%   A LaTeX package for writing software specifiations
+%   By Jordan Bettis
+%   November 2007 
+%
+%   LGPL License Notice:
+%
+%     Copyright 2007 Jordan Bettis
+%   
+%     This program is free software: you can redistribute it and/or
+%     modify it under the terms of the GNU Lesser General Public
+%     License as published by the Free Software Foundation, either
+%     version 3 of the License, or (at your option) any later version.
+%
+%     This program is distributed in the hope that it will be useful,
+%     but WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+%     Lesser General Public License for more details.
+%
+%     You should have received a copy of the GNU Lesser General Public
+%     License along with this program.  If not, see
+%     <http://www.gnu.org/licenses/>.
+%
+%   This package requires the 'palatino' package and the 'titling'
+%   package, both of which are part of the texlive distribution
+%
+%   IF YOU PREFER THE COMPUTER MODERN FONT TO PALATINO, COMMENT OUT
+%   THE \usepackage{palatino} STATEMENT BELOW. This style will work
+%   the same using CM, it will just be much uglier.
+%
+%   A4 PAPER SUPPORT is currently untested as I have no A4 paper
+%   avaliable. If you test it, please let me know.
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{softwarespec}
+
+\usepackage{palatino}
+\usepackage{titling}
+\usepackage{parskip}
+
+%%
+% Create all the macros needed for the title
+% We get date, title, and author handling from the titling package.
+
+\newcommand{\thedocumentversion}{\relax}
+\newcommand{\thedocumentnumber}{\relax}
+\newcommand{\thereviewer}{\relax}
+\newcommand{\theprojectname}{\relax}
+
+
+\newcommand*{\documentnumber}[1]{\renewcommand*{\thedocumentnumber}{#1}
+\markboth{\textnormal{#1}}{\textnormal{#1}}}
+\newcommand*{\documentversion}[1]{\renewcommand*{\thedocumentversion}{-#1}}
+\newcommand*{\reviewer}[1]{\renewcommand*{\thereviewer}{%
+\makebox[1.1in][l]{Reviewed by}\\{\Large {#1}}\normalsize}}
+\newcommand*{\projectname}[1]{\renewcommand*{\theprojectname}{#1}}
+
+
+\renewcommand*{\maketitle}{\begingroup
+\begin{titlingpage}
+\raggedright
+\vspace*{-.35in}
+\textbf{\thedocumentnumber}\\
+\textbf{[\thedate\thedocumentversion]}\\[0.1\textheight]
+\raggedleft
+\vspace*{\baselineskip}
+{\Huge \thetitle}\\[2\baselineskip]
+\makebox[1in][l]{Written by}\\
+{\Large\theauthor}\normalsize\\
+\vspace*{3\baselineskip}
+\thereviewer
+\par\vfill
+\begin{flushleft}
+{\Large\textsc{\theprojectname}}
+\end{flushleft}
+\end{titlingpage}
+\endgroup}
+
+%%
+% Page headings setup
+\pagestyle{myheadings}
+
+%%
+% Use the international big endian format for the \today command.
+\renewcommand*{\today}{%
+\number\year{}.\number\month{}.\number\day}
+
+%%
+% Set the margins.
+\setlength{\paperwidth}{8.5in}
+\setlength{\paperheight}{11in}
+\setlength{\topmargin}{0in}
+\setlength{\topskip}{0in}
+\setlength{\footskip}{1in}
+\setlength{\headheight}{0.2in}
+\setlength{\headsep}{0.2in}
+\setlength{\textheight}{9in}
+\setlength{\oddsidemargin}{.25in}
+\setlength{\evensidemargin}{.25in}
+\setlength{\textwidth}{5.75in}
+\setlength{\marginparwidth}{1.2in}
+%\setlength{\parskip}{1.5ex}
+%\setlength{\topsep}{0ex}
+
+\newcommand*{\marginnote}[1]{%
+\marginpar[\begin{flushright}$\rightarrow$\footnotesize #1\normalsize\end{flushright}]{%
+\begin{flushleft}$\leftarrow$\footnotesize #1\normalsize\end{flushleft}}}
+
+%%
+% Wrapper for \ref that formats it a little better
+\newcommand*{\inref}[1]{%
+(see \S\ref{#1})}

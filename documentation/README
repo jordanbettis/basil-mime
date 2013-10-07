@@ -1,0 +1,29 @@
+Time-stamp: <2008-07-21 00:04:38 jordanb>
+
+             BASIL LIBRARY FOR INTERNET MESSAGES AND MIME
+                       Documentation Directory
+
+This directory is a repository of printable TeX format documentation
+for this library. Currently the only document available is the
+Software Specification, stored in MRCY.SPC.002-Basil.tex.
+
+This directory is managed with a makefile. To build the documentation,
+run
+
+make documentation
+
+This will attempt to produce a dvi (from which you can produce
+PostScript using a tool such as 'dvips') and a pdf. The dvi is
+produced twice so that TeX can build the table of contents on the
+first go and use it on the second.
+
+A 'make clean' target is also provided to remove all the generated
+files when you're done.
+
+To build this directory, you need LaTeX2e. You also need the titling
+and parskip packages, as well as the palatino font. They are provided
+in most LaTeX distributions. This package also uses the parskip and
+softwarespec packages, and those are provided in the directory.
+
+ -- Jordan Bettis <jordanb@hafd.org>
+

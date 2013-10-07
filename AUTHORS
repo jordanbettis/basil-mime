@@ -1,0 +1,12 @@
+Time-stamp: <2008-07-16 14:03:35 jordanb>
+
+                    BASIL MESSAGE HANDLING LIBRARY
+                       Authors and Contributers
+
+Jordan Bettis <jordanb@hafd.org> (773) 539-3413 USA
+  * Message and MIME Entity API
+  * Headers management
+  * Address, Message ID, Date Header handling
+  * Content-type handling
+  * String management, Base64, Quoted-Printable, RFC 2047
+  * Generate mime subtype and character set test tools

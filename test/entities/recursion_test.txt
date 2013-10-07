@@ -1,0 +1,67 @@
+Content-Type: Multipart/Related; boundary=bound1
+Content-Transfer-Encoding: 7bit
+
+This entity is constructed to test the library's recursive cursor
+strategy.
+
+--bound1
+Content-Type: Multipart/related; boundary=bound2
+
+a
+
+--bound2
+
+b
+
+--bound2
+Content-type: Multipart / related ; boundary = bound3
+content-transfer-encoding: Quoted-Printable
+
+c
+
+--bound3
+
+d
+
+--bound3
+content-type: text/enriched
+content-transfer-encoding: quoted-printable
+
+e
+
+--bound3--
+
+c trailing junk
+
+--bound2
+
+f
+
+--bound2--
+
+a trailing junk
+
+--bound1
+
+g
+
+--bound1
+CONTENT-TYPE: multipart/alternative; boundary="bound\ 4"
+
+h
+
+--bound 4
+
+i
+
+--bound 4
+content-type: text/enriched
+content-transfer-encoding: quoted-printable
+
+j
+
+--bound 4--
+
+h trailing junk
+
+--bound1--

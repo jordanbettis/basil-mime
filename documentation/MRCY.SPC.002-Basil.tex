@@ -1,0 +1,1780 @@
+\documentclass[11pt]{article}
+\usepackage{softwarespec}
+
+\projectname{The Mercury Project}
+
+\title{Software Specification for the Basil Library for Internet Messages and MIME}
+\author{Jordan Bettis}
+\date{2008.10.02}
+\documentnumber{MRCY.SPC.002}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\subsection{Purpose}
+\label{purpose}
+
+Basil is a proposed library to manipulate RFC~2822 Internet
+messages, including those with MIME (Multipurpose Internet Mail
+Extensions) parts. Specifically, the library separates
+header lines, bodies, and MIME entities into easily accessible and
+manipulatable data structures. It also includes tools to parse
+structured RFC~2822 and MIME entity headers into component parts, and
+tools to manipulate RFC~2045 Quoted-Printable and Base64 type string
+encodings, as well as RFC~2047 encoded header components.
+
+The library further supports serialization of associated objects into
+RFC~2822/MIME messages suitable for transmission.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                          SCOPE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Scope}
+\label{scope}
+
+This document applies to the Basil library. The provisional
+fulfillment of the requirements herein will be version 0.9. Version
+1.0 will be assigned when a test framework is built and the library is
+demonstrated to fulfill all the requirements.
+
+Basil will interpret and create RFC~2822 messages. These messages
+can have MIME parts as described by RFC~2045. Transmission,
+reception, display, storage, and retrieval of Internet mail messages
+are beyond the scope of this document and beyond the mandate of the
+Basil library.
+
+As of this version of this document, this library does not provide
+support for the interpretation of ``Trace'' type structured
+headers. It does not provide support for the optional ``Content-ID''
+MIME field and as a result does not directly support the
+``message/external-body'' mechanism. It does not support the creation
+of ``experimental'' MIME types, subtypes, or content transfer
+encodings. This may change in future revisions of this document.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                        DEFINITIONS
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Definitions}
+\label{definitions}
+
+\begin{description}
+
+\item[compile] refers, in the context of this document, to the
+  transformation of a set of structured header elements represented
+  logically in memory into a string representation according to
+  applicable standards. Contrast with ``serialize.''
+
+\item[Content Transfer Encoding (CTE)] refers to one of two string
+  transformations defined by RFC~2045 (Quoted-Printable and Base64) to
+  transform arbitrary data such that it contains no characters illegal
+  according to RFC~2045. The standard also defines a set of identities
+  that differ from CTEs in that they do not define a transitive
+  encoding but merely describe the properties of the characters one
+  might encounter in the data. Contrast with ``identity.''
+
+\item[decode] refers to changing an encoded string representation of
+  data into internal objects by removing any RFC~2045 or RFC~2047
+  encoding.
+
+\item[encode] refers to changing an internal object stored as binary
+  data in an Ada string to a serializable string containing only a
+  subset of US--ASCII characters as required by RFC~2822.
+
+\item[identity] refers to the categorization of entity body data based
+  on the properties of the characters one may encounter in the
+  data. RFC~2045 defines three identities, `7bit,' `8bit,' and
+  `Binary.' Contrast with ``Content Transfer Encoding.''
+
+\item[serialized entity] is an entity represented as a string per the
+  guidelines of RFC~2822, RFC~2045, and other relevant documents. 
+
+\item[encapsulate] refers to the process of encoding text values that
+  would otherwise be illegal in RFC~2822 headers. This process is
+  described by RFC~2047.
+
+\item[entity] may refer either to an internet message or a MIME
+  entity.
+
+\item[entity object] is the logical representation of an object in
+  memory, contrasted with the serialized representation, in a
+  string.
+
+\item[multipart entity] is an entity whose body contains child MIME
+  entities. 
+
+\item[parse] refers, in the context of this document, to the
+  transformation of a set of structured header elements represented as
+  a header value string into a set of logical objects. Contrast with
+  ``unserialize.''
+
+\item[serialize] refers to the transformation of an object represented
+  logically in memory to one represented as a string of characters.
+
+\item[simple entity] is an entity whose body contains a terminal
+  parcel of data whose MIME type is something other than 'multitype.'
+
+\item[structured message header] is a header with machine-parsable message
+  information, as defined by RFC~2822. There are four types of
+  structured headers, those which contain Internet mail addresses,
+  those which contain message identifiers, those which contain mail
+  server ``received'' clauses, and for the purposes of this library,
+  those which contain MIME information, as defined by RFC~2045.
+
+\item[subprogram] refers to a procedure or a function, without making
+  a distinction between the two based on potential for a returned
+  value.
+
+\item[unencapsulate] refers to the process of finding and decoding
+  words in an entity header that were encoded per the specification of
+  RFC~2047 in order to comply with RFC-2855.
+
+\item[unserialize] refers to the transformation of an object
+  represented as a string to one represented logically in memory.
+
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                        REFERENCES
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{References}
+
+\begin{itemize}
+
+\item Ada Rapporteur Group. \emph{The Ada 2005 Language Reference
+  Manual}. Ada-Europe, 2005.
+
+\item Freed, Ned. and Nathaniel Borenstein. \emph{Multipurpose Internet Mail
+  Extensions (MIME) Part One: Format of Internet Message Bodies} RFC
+2045.  Internet Engineering Task Force, November 1996.
+
+\item Klensin, John, Ned Freed, Marshall T Rose, Einar A Stefferud, and Dave
+Crocker. \emph{SMTP Service Extension for 8bit-MIMEtransport} RFC
+1652. Internet Engineering Task Force, July 1994.
+
+\item Moore, Keith. \emph{Multipurpose Internet Mail Extensions (MIME) Part
+  Three: Message Header Extensions for Non-ASCII Text} RFC~2047.
+Internet Engineering Task Force, November 1996.
+
+\item Resnick, Peter. \emph{Internet Message Format} RFC~2822, Internet
+Engineering Task Force, April 2001.
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                         OVERVIEW
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{Overview}
+
+This document prescribes the behavior and interface of the proposed
+library. An description of the library and general requirements are in
+\S\ref{description}. The specific requirements for each component are
+in \S\ref{specific-requirements}. The Specific Requirements portion of
+this document is organized by functional interface unit, the divisions
+between which are generally congruent with the divisions between
+interface packages, types, and subprograms.
+
+\subsubsection{Changes in This Version}
+
+This document supersedes MRCY.SPC.002 [2008.01.21-1], which was the
+previous version of this document. The following changes have been
+made:
+
+\begin{description}
+
+\item[Removal of Unicode Support] The original design had this library
+  serving as a wrapper for the xmlada library's Unicode
+  support. However, I have since decided that xmlada is inadequate to
+  implement Unicode-capable programs---sufficient Unicode support
+  will require the development of a new library---and that having any
+  Unicode library as a hard requirement for this library is not
+  advantageous. The current design for this library calls for the
+  creation of data types containing sufficient metadata that the text
+  can be turned over to an external library for Unicode conversion.
+
+\item[The use of Ada 2005] The previous version allowed the use of
+  \texttt{Wide\_Wide\_Char\-acter} but no additional Ada 2005
+  features. This version of the document allows full use of Ada 2005
+  as it is clear that Ada 2005 support will be widespread when the
+  library is delivered. In particular, the library as current
+  envisioned will make extensive use of the Ada 2005
+  \texttt{Doubly\_Linked\_List} container.
+
+\item[Abstract Descriptions] As currently envisioned, the internal
+  structure of the library will consist of some abstract objects from
+  which the interface objects are elaborated. For instance, a message
+  and a MIME entity share many properties so it is not unreasonable to
+  assume that the implementation will start with an abstract entity to
+  implement the common properties. In this version of the document I
+  choose to discuss the interface objects in terms of those abstract
+  objects, in an attempt to reduce the complexity and redundancy in
+  the specification.
+
+\end{description} 
+
+
+\subsubsection{Discussion of Elements in the Abstract}
+
+As stated above, in this version of this document I have chosen to
+discuss similar objects first in terms of an abstract object which has
+the intersection of their properties, and then how each concrete
+object differs from the abstract. This is similar to a facet of Object
+Oriented program design, and I have chosen this model for the same
+reason it is used in OO: to reduce redundancy. However, this document
+is not intended to be perscriptive of the \emph{design} of the
+software. References to abstract objects in this document do not
+necessairly perscribe that the same abstract objects need exist in the
+software itself.
+
+In addition, this document describes some elements of the program
+interface in terms of library units defined in the Ada 2005 Reference
+Manual. Again, it should not be construed that the reference to these
+functions imply that the library must use such Ada features, only that
+the library provide an interface feature with the same
+\emph{properties} as that described in the RM. It is left to the
+implemention to decide how best to provide that.
+
+\section{Description}
+\label{description}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                     PROJECT PERSPECTIVE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Project Perspective}
+
+The intent of the Mercury Project\footnote{The name of the mailing
+  list is unlikely to be ``Mercury,'' as the previous version of this
+  document asserted, due to trademark concerns, but the exact name has
+  not been settled upon so this document will continue to refer to the
+  effort as ``the Mercury Project.''} is to produce mailing list
+software which is both more modern and more efficient than Mailman,
+which is the current standard FOSS (Free and Open Source) mailing list
+package.
+
+The Mercury Mailing List Manager will require functionality to create
+messages, read and write header lines, interpret the contents of
+structured headers to determine the origin of mail commands and
+properly route messages being sent, and to modify message bodies to
+append mailing list information. It will need to do these tasks
+regardless of the existence of MIME entities and encodings in the
+message.
+
+In addition, Mercury will have a web archive component which will need
+to interpret, transcribe, modify, and display messages. That component
+will require extensive MIME handling abilities.
+
+For these reasons, Mercury needs a robust RFC~2822 message
+manipulation system, with extensive MIME support. However, the Ada
+language currently lacks a FOSS library for manipulating MIME
+messages. Because MIME is a difficult technology to support, and
+because the Mercury Project will need extensive MIME capabilities, I
+believe it is advantageous to spent time developing a general-purpose
+MIME library for Ada.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                      PROGRAM INTERFACE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Program Interface}
+
+This is a brief description of the types and subprograms which shall
+serve as the public interface to the Basil library. For detailed
+requirements for each component, see \S\ref{specific-requirements}
+Specific Requirements.
+
+\subsubsection{String Handling}
+\label{pi:strings}
+
+By definition, all strings in RFC~2822 are constrained to a
+subset of values from the seven-bit US--ASCII character set. As demand
+grew for a wider range of characters, this limited definition was
+supplemented through the use of MIME-encoded text values. MIME
+encoding works by assigning metadata containing the character set and
+encoding method to the text, and then applying an encoding method that
+transforms the text such that every value is in the legal range so it
+can be treated as seven-bit US--ASCII text.
+
+For message and MIME entity bodies, the metadata is set in the entity
+headers, and is managed as part of the entity object (See
+\S\ref{pi:abstract-entities} and \S\ref{sr:abstract-entities}, and
+also \S\ref{sr:content-types} for the content type object). For
+non-ASCII character sets (as well as illegal ASCII values) which are
+encoded into the message headers themselves, the metadata is embedded
+in the string along with the encoded value. We call this construct an
+``RFC~2047 encapsulated value.''
+
+MIME refers to the encoding methods used to pack arbitrary data into
+the legal range of characters ``Content Transfer Encodings'' (CTEs).
+It also defines various identities that are also referred to as CTEs
+but do not, in themselves, define transformative encodings. The true
+CTEs are Quoted-Printable and Base64. The identities are 7bit, 8bit,
+and Binary. Only the two true CTEs are valid in RFC~2047
+encapsualization. Because the identities themselves are not
+transformations, the Basil library need only support Quoted-Printable
+and Base64 transformation, but it should recognize the identities when
+they appear in MIME metadata.
+
+Basil shall define a type \texttt{Encoded\_String} to restrict the
+values of generated strings to legal RFC~2822 values, and a set of
+operations to use the CTEs to transform text into and out of that
+type. It shall also define a set of direct transformations between
+that type and Ada \texttt{String} and \texttt{Unbounded\_String}
+types.
+
+In order to retain metadata information from RFC~2047 encapsulated
+headers, Basil shall define a \texttt{Typed\_Text} type which will
+combine the string metadata and the value into a unified object, to
+allow unencapsualization which retains the character set
+information. Because RFC~2047 permits words encapsulated in multiple
+character sets in the same string, it shall also define a list of
+\texttt{Typed\_Text} objects which can be used to describe a string
+whose components are in several different character sets.
+
+Finally, like many text-based networking standards, RFC~2822 defines a
+newline as being a linefeed (LF) character followed by a carriage
+return (CR). Basil should therefore provide functions to translate
+messages between this format and the Unix format in which newlines
+consist of a single linefeed (LF) character.
+
+\subsubsection{Entities in the Abstract}
+\label{pi:abstract-entities}
+
+The basic structure of a MIME entity consists of a list of headers,
+two newline sequences, and a body containing the consignment.
+Incidentally, the basic structure of an RFC~2822 internet message
+consists of a list of headers, two newline sequences, and the
+body. Because of the inherent similarity of structure it is natural to
+consider the objects in conjunction.
+
+An abstract entity, from which this document considers MIME entities
+and internet messages derived, shall have a header list
+\inref{pi:header-lists}, and an unbounded string containing the body
+part. Entities may be simple, such that their consignment consists of
+a single terminal data object, or may be multipart, such that their
+consignment consists of child entities. The entity objects shall have
+support for referencing list of child entities which shall only be
+available to the user when the message is multipart. It should be
+possible to redefine a simple entity object to be multipart, and to
+redefine multipart entities to be simple if they have no children.
+
+The library shall provide a function that reads a serialized entity
+from a string and returns an entity object. It shall also provide a
+function which takes an entity object and returns a serialized string
+representation of the object.
+
+All entities shall have a content type represented in its header list
+and managed by the library. There shall be a function which takes an
+entity object and returns a content type object describing the
+entity. There should be another to change its content type, and
+another to allow the user to easily test whether the entity is
+multipart or simple.
+
+
+\subsubsection{Entity Headers}
+\label{pi:headers}
+
+Entity headers consist of a key and a value, separated in serialized
+form by a colon character and a space. Headers, according to RFC~2822,
+may only contain US--ASCII characters and may be no longer than 998
+characters, including the key. Header lines should be folded to be no
+longer than 78 characters, and the standard includes rules for
+properly folding headers.
+
+To obey this specification's ``best effort'' requirement
+\inref{reliability} the library shall not constrain the strings
+internal to the header object to exclude illegal characters, nor shall
+the length requirements be enforced. Thus, header objects shall
+consist of two unbounded Ada strings, one for the key and another for
+the value.
+
+The library shall provide a function to produce a header object given
+a string representation of a serialized header. It shall also provide
+a function that takes a header object and returns a serialized string
+representation. The library shall also provide a constructor which
+takes a key and value and produces a header object, folding any lines
+in the input value to obey the line length recommendation and
+rejecting any input which would result in an illegal header.
+
+\subsubsection{Lists of Headers}
+\label{pi:header-lists}
+
+The library shall implement lists of header objects for use in the
+entity implementation. Like the multitype text object
+\inref{sr:multitype-texts}, the list shall support all operations
+supported by the Ada \texttt{Doubly\_Linked\_Lists} container as
+defined in the Ada 2005 Reference Manual \S{}A.18.3.
+
+In addition to those operations, the library shall define a function
+which, given a list of headers, produces a serialized string
+representation of the list. It shall also provide a function that
+takes a string representing a serialized header list and returns a
+header list object representation.
+
+The library shall also provide a subprogram that takes a list, a key,
+and a value, and ensures that a header in the list with the key
+contains the value, either by overwriting the first existing header in
+the list with the key, or by appending a new header to the list, if no
+matches exist. It shall also provide a subprogram which takes a list
+and a key and removes any headers from the list with the key. 
+
+\subsubsection{MIME Entities}
+\label{pi:mime-entities}
+
+The library shall support MIME entities by providing a MIME entity
+object which shall have all the properties and methods described in
+the abstract entities portion of this document
+\inref{pi:abstract-entities}.
+
+MIME entities may be included as child units of other MIME entities or
+internet messages surrounded by data that is not part of the headers
+or consigned data, but must be preserved per RFC~2045. The library
+shall implement private properties and operations necessary to
+preserve this data in any entity object unserialized from a string,
+but need not provide access for users to create such data themselves.
+
+The library shall provide a function that takes a content type object
+\inref{pi:content-types} and body data and returns a newly constructed
+MIME entity object based on the inputs.
+
+\subsubsection{Internet Messages}
+\label{pi:messages}
+
+The library shall support internet messages by providing an Internet
+Message Object which has all the properties and methods described in
+the abstract entities portion of this document
+\inref{pi:abstract-entities}.
+
+Message entities have senders, recipients, subjects, message IDs, and
+dates, as well as other user-defined headers. Therefore, the library
+shall define a function which accepts as input sender, recipient,
+and subject information, as well as content type and body, and
+generates a creation date and message ID header to return a fully
+constructed message object.
+
+Senders and recipients can be spread across several headers, so there
+should be a function which takes a message object and returns an
+address list of senders, and another which returns a list of
+recipients. 
+
+Creation of message IDs can be handled automatically by the library
+as the only requirement for a message ID is that it follows a
+particular structure and that it is globally unique, but the
+library shall provide a function which takes a message object and
+returns its message ID. 
+
+Generation of a creation date (``Date'') header shall also be
+automatic but the library shall also provide a subprogram to allow the
+user to change the creation date of a message, in addition to a
+function that takes a message object and returns its creation date.
+
+\subsubsection{Structured Headers}
+\label{pi:headers:structured}
+
+Header values generally are assumed to be unstructured text, however,
+the standards define some headers to have a particular structure which
+can be parsed, and which must be observed by compliant implementations.
+
+RFC~2822 defines a number of structured headers:
+
+\begin{itemize}
+
+\item Headers containing email addresses, either as originators or
+  recipients (examples include ``From,'' ``To,'' and ``Cc'' headers). 
+
+\item Date-related headers (an example is the origin ``Date'' header). 
+
+\item Headers containing message IDs (examples include the
+  ``Message-ID'' and the ``In-Reply-To'' headers).
+
+\item Trace headers generated by Mail Transport Agents as the message
+  progresses towards delivery.
+
+\end{itemize}
+
+The Trace headers will not be needed for the Mercury Project and are
+quite complex, so support for them is not a requirement of Basil at
+the present time.
+
+RFC~2045 further defines the structured ``Content-Type'' and
+``Content-Transfer-En\-coding'' headers, as well as some other
+structured headers that are not currently requirements of this
+library. 
+
+This library shall support the time-related headers by providing
+functionality to parse RFC~2822 structured time values into Ada
+Calendar \texttt{Time} objects, and to compile Ada Calendar
+\texttt{Time} objects into RFC~2822 structured time values.
+
+The library shall also define objects which represent the useful
+features of email addresses, which we assert to be the real name label
+and the address part. Because multiple addresses may appear on a
+header line, it shall also define a list of address objects with
+requirements similar to the multitype text and header list objects
+mentioned above \inref{pi:strings}, which is to say, it shall support
+all operations supported by the Ada \texttt{Doubly\_Linked\_List}
+container (see the Ada 2005 Reference Manual \S{}A.18.3).
+
+The library shall provide a constructor for an address object which
+takes a real name and message part as input. It shall also provide a
+function which, given an input string containing a valid structured
+header value containing address, produces a list of address objects.
+The library shall also provide a function that does the reverse: given
+a list of address objects, it shall create a valid RFC~2822 structured
+address header value string.
+
+The library shall also provide an object which represents a message
+ID, which currently need only contain an Ada unbounded string to store
+the ID itself. It shall also provide a list for message IDs, and
+functions to parse and compile the lists from and to serialized
+strings, and a constructor which verifies that the provided message
+ID string is valid.
+
+\subsubsection{Content Type Objects}
+\label{pi:content-types}
+
+The concept of a content type is central to MIME, so it is useful to
+provide an object which represents all the information that comprises
+a content type. In MIME, all objects have a `type' and a `subtype' and
+a `content transfer encoding.' Text-type objects also have a character
+set. Some other types may have other type-specific information but the
+library does not need to support them at the present time.
+
+It is most useful and flexible for our operation that the type,
+subtype, CTE, and character set be enumerated by the library. Lists of
+each are available from IANA \inref{sr:content-types}. 
+
+The content type object itself shall contain a means by which a type,
+a relevant subtype, a CTE, and for text objects, a character set, may
+be defined using the enumerations.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                        CONSTRAINTS
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Constraints}
+\label{constraints}
+
+\subsubsection{Message Immutability}
+
+RFCs 2822 does not allow messages to be modified in transit, this
+includes re-ordering headers and components of structured header
+fields, re-folding of folded header lines, and removal of
+contents. This library should treat any message unserialized into
+objects to be in-transit and sufficient data must be preserved to
+allow re-encoding of the message in a manner that preserves these
+properties.
+
+When the user of this library requests that changes be made to a
+message they should be done in such a way as to minimize the number of
+changes needed to the message as a whole.
+
+\subsubsection{Language Requirements}
+
+This library shall be written in full compliance with the Ada 2005
+standard.
+
+\subsubsection{Parallel Operation}
+
+This library must have no components that are not safe to use in a
+parallel processing environment.
+
+\subsubsection{Memory Constraints}
+
+The library must deallocate all objects it allocates. It must provide
+a destructor (if necessary) to cleanly deallocate all objects passed to
+the calling program.
+
+\subsubsection{Reliability Requirements}
+\label{reliability}
+
+It is better, for the purpose of this library, that a malformed
+message be interpreted as best as possible. This library, when given
+an encoded message, shall make a ``good faith'' attempt to decode
+it. 
+
+It shall not fail on messages that use 8-bit characters, despite the
+RFC~2822 requirement that encoded messages consist only of a subset of
+US--ASCII. This library should treat lone Carriage Return (CR) or
+Linefeed (LF) characters as newline sequences despite the RFC~2822
+definition of a newline sequence as a carriage return followed by a
+linefeed. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                  ASSUMPTIONS AND DEPENDENCIES
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Assumptions and Dependencies}
+\label{assumptions}
+
+This document assumes that the IETF Internet Message Format and MIME
+standards completely describe the structure of a preponderance of the
+email messages being passed on the Internet. Successful fulfilment of
+the requirements of this document will be the correct parsing of
+messages encoded to the IETF specifications, and creation of the same
+from message objects.
+
+However, for this library to be useful we must recognize that
+standards are often violated. While it shall not be considered
+erroneous operation for this library to fail to parse messages that
+are not compliant with applicable standards, where changes to increase
+the size of the set of messages properly parsed may be made
+simply without violating the overall consistency or standards
+compliance of the library, they may be made without a new or updated
+Requirements Document.
+
+Should a substantial number of messages found to be substantially
+non-compliant with the RFCs then this document and the software may
+require modification.
+
+This document defines a translation scheme for MIME subtype names from
+a textual representation using the grammar defined by RFC~2045 into
+Ada enumeration tokens that is na\"{i}ve and dependent upon current
+practice of using a limited subset of allowable tokens in the MIME
+subtype names \inref{sr:mime-to-enumeration-translation}. Should the
+Internet Assigned Numbers Authority (IANA) approve a name that
+violates the assumptions of
+\S\ref{sr:mime-to-enumeration-translation}, this document will need
+modification.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                    SPECIFIC REQUIREMENTS
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Specific Requirements}
+\label{specific-requirements}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                       STRING HANDLING
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{String Handling}
+\label{sr:strings}
+
+\subsubsection{String Types}
+
+The Basil library will need to place various restrictions on input
+strings, and to manipulate various encodings. For this purpose and to
+make clear the type of string required, the following string types
+are defined.
+
+\begin{description}
+
+\item[\texttt{Encoded\_String}] This type shall be used for strings
+  that should be encoded to comply with RFC~2822 limitations on
+  permitted characters. It is a subset of US--ASCII with high bit and
+  NULL disallowed. Note that this type should only be used to restrict
+  the range of allowed characters in messages \emph{generated} by use
+  of this library, not in messages processed \emph{through} it. For
+  that reason, strings internal to most objects tasked with
+  representing message parts should \emph{not} be of this type.
+
+\item[\texttt{Typed\_Text}] This type shall be used in situations
+  where a particular string represents text in a particular character
+  set. This is principally for use with the functions to encapsulate
+  and unencapsulate headers per RFC~2047.
+
+\item[\texttt{Multitype\_Texts.List}] This object shall contain a list
+  of \texttt{Text\_Type} objects, which together constitute a string of
+  text in multiple different character sets. This is, as above,
+  principally for use with functions to encapsulate and unencapsulate
+  headers, and is occasioned by the RFC~2047 specification that
+  individual lines of text may contain words encapsulated in multiple
+  character sets.
+
+\end{description}
+
+\subsubsection{The \texttt{Basil.Typed\_Texts} Package}
+
+The \texttt{Typed\_Text} object shall be defined in the package
+\texttt{Basil.Typed\_Texts}. The implementation of the type shall be
+private, and the following access functions shall be provided:
+
+\begin{description} 
+
+\item[\texttt{To\_Typed\_Text}] This function shall take a string
+  containing text in a given character set and a character set ID. It
+  shall return a typed text object formed from the provided
+  information.
+
+\item[\texttt{Get\_Value}] This function shall take a typed text
+  object and return a string containing the text contained in it.
+
+\item[\texttt{Get\_Character\_Set}] This function shall take a typed
+  text object and return the character set ID.
+
+\end{description}
+
+\subsubsection{The \texttt{Basil.Multitype\_Texts} Package}
+\label{sr:multitype-texts}
+
+This package shall implement a list of \texttt{Typed\_Text} objects
+which shall have all the properties and support all the operations of
+the Ada \texttt{Doubly\_Linked\_Lists} container. To fulfill the
+requirements of this specification, the Basil Library shall implement
+every operation defined in the Ada 2005 Reference Manual \S{}A.18.3
+for manipulating the multitype text list.
+
+\subsubsection{The \texttt{Basil.Strings} Package}
+
+The \texttt{Encoded\_String} type shall be defined in the
+\texttt{Basil.Strings} package. The package shall contain the
+following conversion functions for managing this type:
+
+\begin{description}
+
+\item[\texttt{To\_Encoded\_String}] This function shall take either an
+  Ada \texttt{String} or an \texttt{Unboun\-ded\_String}. It shall return
+  an \texttt{Encoded\_String}.
+
+\item[\texttt{From\_Encoded\_String}] This function shall take an
+  \texttt{Encoded\_String} and shall return either an Ada
+  \texttt{String} or an \texttt{Unbounded\_String}.
+
+\end{description}
+
+In addition, the \texttt{Basil.Strings} package shall contain the
+following subprograms for performing CTE conversions and RFC 2047
+encapsualization:
+
+\subsubsection{The \texttt{Encapsulate\_Header} Function}
+
+This function shall take one of: (1) an Ada string and character set
+ID; (2) a typed text object; (3) a multitype text list. It shall return
+an encoded string containing all words encapsulated in full compliance
+with RFC~2047.
+
+The function shall identify text that is compatible with US--ASCII,
+which is to say, text in which the character set is congruent with or
+a superset of the US--ASCII character set. This includes all of the
+ISO--8859 series character sets as well as the UTF-8 Unicode Encoding
+Scheme. For such text, any words that contain no characters
+that needs encapsulation shall not be encapsulated. When a word
+contains a character that needs encapsulation, the entire word shall
+be encapsulated, using the definition of a ``word'' contained in
+RFC~2047.
+
+For text with a character set that is \emph{not} compatible with
+US--ASCII, the function shall encapsulate the entire input as an
+encapsulated word in full compliance with RFC~2047.
+
+The function shall take an optional string quote type argument of
+either Quoted-Print\-able or Base64. If none is specified, then the
+quote type shall default to Quoted-Printable.
+
+\subsubsection{The \texttt{Unencapsulate\_Header} Function}
+
+This function shall take encoded string containing encapsulated
+RFC~2047 words and return a typed text object or multitype text list
+containing unencapsulated text.
+
+The option to return a typed text object shall be provided on the
+understanding that the vast majority of messages sent on the internet
+do not encapsulate individual header lines in multiple character sets,
+although RFC~2047 permits the construct. The user can therefore choose
+a much simpler return object should they decide not to support the
+behavior.
+
+When the user requests a typed text return value, the function shall
+process the string in the normal way, then consider each typed text
+object in the list, to determine if they can be combined into a
+single typed text object without loss of identifying information. 
+
+This function shall perform ``best effort'' decoding of the input,
+this is especially true of bad input string formations that are
+identified by RFC~2047 as situations that robust implementations
+should handle. However, users shall also be provided with a boolean
+switch named \texttt{Reject\_Badness} that allows them to choose to
+have the function raise an exception on any bad input.
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Character\_Set}] This exception shall be raised
+  if the user requests \texttt{Re\-ject\_Bad\-ness} and the string
+  contains an encapsulated word in an unrecognized character set.
+
+\item[\texttt{Invalid\_Quoting}] This exception shall be raised
+  if the supplied string does not contain a properly-formed RFC~2047
+  word encapsulation. Generally if the user has not requested
+  \texttt{Reject\_Badness} the function shall prefer to skip words
+  that can not be unencapsulated rather than raising this exception,
+  but it may be raised in any case.
+
+\item[\texttt{Illegal\_Character}] This exception shall be raised if
+  the supplied string contains an illegal character. The same rule as
+  above applies regarding \texttt{Reject\_Badness}.
+
+\end{description}
+
+\subsubsection{The \texttt{Quote\_RFC2045} Function}
+
+This function shall take an Ada string containing data and return an
+encoded string containing a representation encoded via a CTE in full
+compliance with RFC~2045. The function shall fold the input, using a
+``CRLF'' sequence, such that no output line exceeds 78 characters in
+length, not including the newline sequence.
+
+The function shall take an optional content transfer encoding method
+argument of either Quoted-Printable or Base64. If none is specified,
+then the CTE shall default to Base64.
+
+\subsubsection{The \texttt{Unquote\_RFC2045} Function}
+
+This function shall take a encoded string representing text encoded by
+the rules of RFC~2045 using either the Quoted-Printable or Base64
+content transfer encoding. It shall return an Ada string containing an
+unencoded representation.
+
+This function shall perform ``best effort'' decoding of the input.
+However, users shall also be provided with a boolean switch named
+\texttt{Reject\_Badness} that allows them to choose to have the
+function raise an exception on any bad input.
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Quoting}] This exception shall be raised if the
+  input string was improperly quoted. If the user has requested
+  \texttt{Reject\_Badness} this exception shall be raised on any bad
+  input. Otherwise, the function shall only raise the exception if the
+  input is malformed such that it cannot be unquoted.
+
+\item[\texttt{Illegal\_Character}] This exception shall be raised if
+  the input string contains an illegal character and the user has
+  requested \texttt{Reject\_Badness}.
+
+\end{description}
+
+\subsubsection{The \texttt{Ensure\_Message\_Newlines} Function}
+
+The purpose of this function is to produce a string where every
+linefeed character is paired with carriage return, per the
+requirements of RFC~2822. For robust behavior with messages that might
+be incorrectly produced on systems that use a carriage return as the
+newline character, it shall also pair a linefeed with any lone carriage
+return.
+
+\subsubsection{The \texttt{Ensure\_Unix\_Newlines} Function}
+
+The purpose of this function is to produce a string with Unix style
+linefeeds only by removing the carriage return from any CRLF pair of
+the supplied string. For robust behavior with messages that might be
+incorrectly produced on systems that use a carriage return as the
+newline character, it shall also replace any lone carriage return with
+a linefeed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                        Abstract Entities
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Entities in the Abstract}
+\label{sr:abstract-entities}
+
+\subsubsection{The Entity Object}
+
+An entity object shall consist of:
+
+\begin{itemize}
+\item A \texttt{Header\_Lists.List} list \inref{sr:header-lists}; 
+\item An \texttt{Unbounded\_string} containing the entity body;
+\item A list of child entities, which shall be available when the
+  entity is multipart. It is left to the implementation to determine
+  how best to implement this.
+\end{itemize}
+
+A multitype entity object should support all of the operations on its
+child list supported by the Ada \texttt{Doubly\_Linked\_List}
+container (See the Ada RM \S{}A.18.3). It should provide two types of
+Cursor object. One of the cursors shall cycle through the direct
+children of the object. The other shall perform a \emph{depth first}
+traversal of the object's children and any potential children of the
+children. Any operation which returns a cursor shall be designed to
+allow the user to choose which type of cursor they wants. The exact
+mechanism to how this is performs is left to the implementation.
+
+Entities have a particular content type, which shall be set-able and
+retrievable using content type objects \inref{sr:content-types}.   
+
+\subsubsection{The \texttt{From\_String} Function}
+
+This function shall take an Ada string containing a serialized entity
+and return an entity object representation using the following
+mechanism:
+
+\begin{enumerate}
+
+\item All headers shall be consumed into \texttt{Header} objects to
+  form the object's header list. No parsing of structured headers need
+  be done.
+
+\item The headers shall be checked to determine if the entity is
+  simple or multitype.
+
+\item In the latter case, all the child entities shall be recursively
+  elaborated to populate the child entity list.
+
+\item The body text shall be copied from the string into the message
+  object's body unbounded string. If the message is multipart, any
+  data between the start of the body and the start of the first child
+  entity shall be placed in the body string.
+ 
+\end{enumerate}
+
+Since this library has a mandate to perform ``best effort''
+interpretation of messages, it is not beneficial for this function to
+raise an exception on partially malformed messages. The rule shall be
+that if this procedure can parse enough of the object to form an
+object containing a valid---if not entirely representative---message
+object, then no exception shall be raised:
+
+\begin{itemize}
+
+\item Header lines which do not begin with a key or with a whitespace
+  (to represent header folding) are to be ignored. Processing shall
+  proceed to the next valid line.
+
+\item MIME entities with garbled or unrecognizable content types shall
+  be treated as ``unknown/unknown'' type entities
+  \inref{sr:content-types}.
+
+\item Invalid or unknown character set IDs or content transfer
+  encodings will not produce errors.
+
+\item If a message string ends during the parsing of a child entity
+  header, or if the mime entity is empty, the entity shall be skipped
+  and no child entity object shall be created for it.
+
+\end{itemize} 
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message\_or\_Entity}] If the library is
+  incapable of producing even a minimal entity object from the input
+  string. This may be caused by a entity with no headers or with
+  entirely garbled headers.
+
+\end{description}
+
+\subsubsection{The \texttt{To\_String} Function}
+
+This function shall serialize an entity object into a string suitable
+for sending as an RFC~2822 message by the following mechanism:
+
+\begin{enumerate}
+
+\item The header shall be serialized in conformance with RFC~2822.
+
+\item The body string shall then be appended to the end of the
+  serialized header string.
+
+\item If the entity is multipart, each child entity shall then be
+  recursively serialized and appended to the string.
+
+\end{enumerate}
+
+This function must not fail to unserialize any entity that
+\texttt{From\_String} was able to serialize. This is to allow
+flawed messages to pass through the library to fullfill the ``best
+effort'' requirement of this document.
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message\_or\_Entity}] This exception shall be
+  raised if the entity object that is passed to the function is invalid.
+
+\item[\texttt{Missing\_Header}]This exception shall be raised when
+  serializing a message object if the message is missing an essential
+  header (``To,'' ``From,'' ``Subject,'' or ``Message-ID'').
+
+\end{description}
+
+\subsubsection{The \texttt{Set\_Content\_Type} Procedure}
+
+The purpose of this procedure is to allow the user to change the
+content type information of an existing entity. It shall take an
+entity and a content type object as input. 
+
+This procedure shall set ``MIME-Version,'' ``Content-Type,'' and
+``Content-Transfer-Encoding'' in the headers of the entity. It shall
+also update any implementation defined record-keeping data that may be
+used to track multitype entities. If a non-multitype content type is
+passed against a multitype message with children, the procedure shall
+raise an exception (see below).
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message\_Or\_Entity}] This exception shall be
+  raised if the entity object that is passed to the procedure is
+  invalid.
+
+\item[\texttt{Invalid\_Content\_Type}] This exception shall be raised
+  if the \texttt{Content\_Type} object supplied to the procedure is
+  empty or has an ``unknown'' or ``experimental'' type, subtype, or
+  content transfer encoding. It shall also be raised if a multitype
+  entity with children is passed a non-multitype content type.
+
+\end{description}
+
+\subsubsection{The \texttt{Get\_Content\_Type} Function}
+
+This function shall take an entity object and return a content type
+object describing the object. For text-type objects, it shall
+determine the character set. If any of the values can not be
+determined (type, subtype, content transfer encoding, or character set
+for text-type objects) the that value shall be set to ``unknown'' in
+the object. The function should differentiate between ``unknown'' and
+``experimental'' values.
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message\_Or\_Entity}] This exception shall be
+  raised if the entity object that is passed to the procedure is
+  invalid.
+
+\end{description}
+
+\subsubsection{The \texttt{Is\_Multitype} Function}
+
+This function shall take an entity object and return a boolean
+evaluation of the assertion that it is multitype-type object. This is
+a shortcut so the user of the library can determine if the operations
+on the list of child objects are permitted, without fetching the
+content type and checking it.
+
+Should the implementation choose to use a discriminant or some other
+way to differentiate between multitype and simple messages which does
+not require retrieving the content type, then this function may be
+omitted. 
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message\_Or\_Entity}] This exception shall be
+  raised if the entity object that is passed to the procedure is
+  invalid.
+
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                      HEADERS PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{The \texttt{Basil.Headers} Package}
+
+\subsubsection{The \texttt{Header} Type}
+
+The \texttt{Header} type shall be defined in the
+\texttt{Basil.Headers} package. The implementation of the type shall
+be private. It shall be structured so that it can contain a distinct
+`key' and `value.' It shall permit any character, including NULL and
+the high bit characters in both the key and value, but the only the
+\texttt{From\_String} function should be allowed to insert values that
+are not legal in headers per RFC~2822.
+
+\subsubsection{The \texttt{From\_String} Function}
+
+This function shall create a header object and populate it with a key
+and value from a passed message string. It shall not decode any CTE in
+the string, nor shall it eliminate or modify header folding. However,
+it shall shall not copy the colon ``:'' character after the end of the
+value, nor shall it copy any whitespace between the colon character
+and the beginning of the value. It shall not copy the ``CRLF''
+sequence at the end of the value.
+
+This function shall reject any header with keys which contain
+characters disallowed by RFC~2822, except high-bit values. It shall
+reject headers with RFC~2047 encoded characters in the key values. 
+
+In order to ease recursing through the header portion of a message, it
+shall not be considered an error to pass this function an offset
+which points to two consecutive ``CRLF'' sequences (which indicates
+the end of the header portion of a message and the beginning of the
+body). Should this function encounter that sequence it shall return an
+empty header object.
+
+Exceptions that may be raised by this function include: 
+
+\begin{description}
+
+\item[\texttt{Invalid\_Header}] This exception shall be raised if a
+  serialized header can not be interpreted, or if it violates one of
+  the above rules.
+
+\item[\texttt{Premature\_End}] This exception shall be raised if the
+  string ends before the end of the header.
+
+\end{description}
+
+\subsubsection{The \texttt{To\_String} Function}
+\label{sr:headers:to-message-string}
+
+This function shall serialize a message header object for inclusion in
+an encoded message string. It shall do so by creating a string
+containing the key, a colon ``:'' character, a space, the value, and a
+``CRLF'' sequence. 
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Header}] This exception shall be raised if a
+  header object is passed to this function which is invalid.
+
+\end{description}
+
+\subsubsection{Header Utility Subprograms}
+
+The package shall also provide the following subprogram to manage
+header objects:
+
+\begin{description}
+
+\item[\texttt{To\_Header}] This function shall take a key and value
+  string and return a header object constructed from the inputs.
+\item[\texttt{Get\_Value}] This function shall take a header object
+  and return its value string.
+\item[\texttt{Get\_Key}] This function shall take a header object and
+  return its key string.
+\item[\texttt{Set\_Value}] This procedure shall take a header object
+  and a value string and replace the value of the object with the
+  passed string.
+\item[\texttt{Set\_Key}] This procedure shall take a header object and
+  a key string and replace the key of the object with the passed
+  string.
+
+\end{description}
+
+Subprograms which create or modify header objects
+(\texttt{To\_Header}, \texttt{Set\_Value}, and \texttt{Set\_Key} shall
+accept inputs only as encoded strings. Empty strings should not be
+excepted for key strings but are acceptable for value strings.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                   HEADER LISTS PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{The \texttt{Basil.Headers.Lists} Package}
+\label{sr:header-lists}
+
+This package shall provide the functionality to manage lists of
+\texttt{header} objects. It shall support all the properties and
+operations supported by the Ada \texttt{Doubly\_Linked\_List}
+container, plus the following specific operations.
+
+\subsubsection{The \texttt{Ensure\_Header\_Exists} Procedure}
+
+The purpose of this procedure is to permit the user of the library to
+ensure that there is a header in a given list with a given key and
+value. 
+
+For instance, if the user wishes to give a message a particular
+message ID, they may pass ``Message-ID'' as the key to this
+procedure. This procedure shall then update the value of the header
+containing the key ``Message-ID'' to the specified value. However, if
+no header in the message's list has such a key, then a \emph{new}
+header shall be created in the list, with the specified key and value.
+
+If multiple headers with the given key exist, the value of the first
+matching header shall be replaced and the remainder left untouched.
+
+The procedure shall only accept encoded string types. 
+
+The procedure shall also accept a header type object instead of the
+key and value strings, in which case it shall replace the value of the
+first matching message header with with the supplied header object's
+value. If no header with a matching key exist, a copy of the header
+object shall be appended to the message object's headers list.
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Header}] This exception shall be raised if the
+  supplied key and value or header object are invalid.
+
+\end{description}
+
+\subsubsection{The \texttt{Purge\_Headers} Procedure}
+
+The purpose of this procedure is to ensure that a header with the
+given key does \emph{not} exist in the given list of headers.
+
+For instance, if the user of the library wishes to remove any
+``Received'' headers from a message's header list, they may pass a
+headers list and the string ``Received.'' The procedure shall then
+remove any header object with that key from the list. 
+
+Because it is useful to allow deletion of non-conformant headers, the
+possible values for `key' should not be constrained. It should not be
+an error to pass the procedure a key value that does not exist in the
+list.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                      MIME ENTITIES PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\subsection{The \texttt{Basil.MIME\_Entities} Package}
+
+\subsubsection{The \texttt{Mime\_Entity} Type}
+\label{sr:mime-entities:mime-entity}
+
+The \texttt{MIME\_Entities} package shall define a
+\texttt{MIME\_Entity} type which shall support all of the operations
+described in \S\ref{sr:abstract-entities} Entities in the Abstract. It
+shall also define a custom constructor for MIME entity objects (see
+below).
+
+RFC~2045 describes text that can be placed before, between, and after
+child MIME entities in a multipart entity's body. Our definition of
+abstract entities provides that the body string shall contain any text
+inserted before child entities, but the library also needs a mechanism
+to preserve data occuring after each child entity. Therefore, this
+object shall have a private string part sufficient to preserve any
+data that might come after the entity's body. Operations on this
+object shall be written to ensure that that data is recorded when the
+parent entity is unserialized, and reproduced when it is serialized.
+
+\subsubsection{The \texttt{To\_MIME\_Entity} Function}
+
+This function shall take as input a content type object and an encoded
+string representing a consignment for the entity. It shall return a
+MIME entity object representing the inputs. It shall not perform any
+content transfer encoding on the consignment string, but it shall do
+validation to ensure that the string contains no illegal values. For
+instance, a string which is purported to be in the Base64 CTE should
+contain no characters not in the Base64 alphabet which are not
+whitespaces.
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[Invalid\_Character] This exception shall be raised if an invalid
+  character exists in the consignment string, per the definition of
+  the CTE or identity in the content type object.
+
+\item[Invalid\_Content\_Type] This function can not accept content
+  type objects with ``unknown'' or ``experimental'' values. This
+  exception shall be raised if the content type object is invalid for
+  that or any other reason.
+
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                       MESSAGES PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{The \texttt{Basil.Messages} Package}
+\label{sr:messages}
+
+\subsubsection{The \texttt{Message} Type}
+\label{sr:messages:message}
+
+The \texttt{Message} type shall consist of all of the properties and
+support all of the operations described in
+\S\ref{sr:abstract-entities} Entities in the Abstract. The specifics
+of internet messages, as they differ from MIME entities, involve
+additional headers used to support their movement through the internet
+mail system. In addition to content type headers (which are optional
+but have default per RFC~2045 when absent), all internet messages must
+have a ``From'' header, a ``To'' header, a ``Subject,'' a ``Date,''
+and a ``Message-ID.'' Messages may also have a plethora of other
+headers, as well as user-defined experimental headers.
+
+Because it is expected that the user of this library will want to
+elaborate the \texttt{Message} type to define their own derived types
+(for instance, a locally generated message, or a message received from
+a different host), the \texttt{Message} type shall be tagged. All
+subprograms which operate on this object shall be constructed to
+operate on its class.
+
+\subsubsection{The \texttt{Compose} Function}
+
+The purpose of this function is to provide a constructor for internet
+message objects which strictly enforce applicable standards. It shall
+accept the input necessary for that purpose, and return a message
+object suitable for serializing and sending, or for modification by the
+library user.
+
+The function shall take: (1) a US--ASCII encoded string containing a
+valid, encoded ``From'' value header; (2) the same for a ``To''
+header; (3) the same for a ``Subject'' header; (4) an encoded string
+representing the message body. The subject and body strings may be
+empty.
+
+While the latter two may be empty strings, none of the above arguments
+are optional. All inputs must be properly encoded. Because this
+procedure is to facilitate the creation of \emph{standards compliant}
+messages, it shall fail on any input that violates applicable
+standards. The procedure shall add those headers which are necessary
+to make a well-formed message:
+
+\begin{itemize}
+\item A ``Message-ID'' header containing a universally unique ID
+  string for the message, in the format specified by RFC~2822.
+\item A ``Date'' header containing the creation date, as specified by
+  RFC~2822.
+\item For MIME messages, a ``MIME-Version'' header containing the
+  value ``1.0,'' as specified by RFC~2045.
+\item For MIME messages, a ``Content-Type'' as specified by RFC~2045.
+\item For MIME messages, a ``Content-Transfer-Encoding'' header, again
+  per RFC~2045.
+\end{itemize}
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Character}] This exception shall be raised if
+  any input contains characters disallowed by RFC~2822,
+  \emph{including} printable ISO--8859 characters. If headers are not
+  parsable because they contain illegal characters, this exception
+  shall be raised rather than one of the following.
+
+\item[\texttt{Invalid\_Structured\_Header}] The function shall
+  validate the structured headers passed to it by attempting to parse
+  them. If they are invalid, this exception shall be raised.
+
+\end{description}
+
+\subsubsection{The \texttt{Get\_Senders} Function}
+
+This function shall parse the headers containing sender information
+(the ``From'' and the ``Sent'' headers) into a list address objects.
+
+Exceptions that may be raised by this function include: 
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message}] This exception shall be raised if the
+  message object is invalid.
+
+\item[\texttt{Invalid\_Structured\_Header}] This exception shall be
+  raised if a header can not be parsed because it is malformed.
+
+\end{description}
+
+\subsubsection{The \texttt{Get\_Recipients} Function}
+
+This function shall parse the headers containing recipients (the
+``To,'' ``Cc,'' and ``Bcc'' headers) into a list of address objects.
+
+Exceptions that may be raised by this function include: 
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message}] This exception shall be raised if the
+  message object is invalid.
+
+\item[\texttt{Invalid\_Structured\_Header}] This exception shall be
+  raised if a header can not be parsed because it is malformed.
+
+\item[\texttt{unknown\_Encoding}] This exception shall be raised if
+  an RFC~2047 encapsulated word is encountered in an unsupported
+  character encoding.
+
+\end{description}
+
+\subsubsection{The \texttt{Get\_Creation\_Date} Function}
+
+This function shall take a message object and find and parse its
+origin-date (``Date'') header field. It shall return an Ada Calendar
+\texttt{Time} type object representation of the value of that field.
+
+Exceptions that may be raised by this function include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message}] This exception shall be raised if the
+  message object is invalid.
+
+\item[\texttt{Invalid\_Structured\_Header}] This exception shall be
+  raised if a header can not be parsed because it is malformed.
+
+\end{description}
+
+\subsubsection{The \texttt{Set\_Creation\_Date} Procedure}
+
+This procedure shall take a message object and an Ada Calendar
+\texttt{Time} object. It shall set the message's ``Date'' header by
+compiling the \texttt{Time} object into an RFC~2822 complaint date
+string and setting it as the value of the message's orig-date
+(``Date'') header. The procedure shall ensure that no other such
+headers exist in the message's header list.
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Message}] This exception shall be raised if the
+  message object is invalid.
+
+\end{description}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                  ADDRESSES AND MESSAGE IDS
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Structured Headers: Addresses and Message IDs}
+
+Because the support required for address and message IDs is similar,
+we can consider the specific requirements for the two types of
+structured headers in tandem. For an overview of structured header
+support in the Basil library, see \S\ref{pi:headers:structured}
+Program Interface for Structured Headers.
+
+\subsubsection{The \texttt{Address} Type}
+
+The \texttt{Basil.Addresses} package shall define the private type
+\texttt{Address}. It shall be structured such that it can contain an
+RFC~2822 address and a display name.
+
+This package shall define a set of utility functions to manage address
+objects:
+
+\begin{description}
+
+\item[\texttt{To\_Address}] This function shall take an encoded string
+  representation of an address and another of a display name (in order
+  to encourage the user to encapsulate non-ASCII data). It shall
+  return an Address object constructed from the inputs.
+
+\item[\texttt{Get\_Address}] This function shall take an address
+  object and return its RFC~2822 address part.
+
+\item[\texttt{Get\_Display\_Name}] This function shall take an address
+  object and return its RFC~2822 display-name part.
+
+\end{description}
+
+\subsubsection{The \texttt{Message\_ID} Type}
+
+The \texttt{Basil.Message\_IDs} package shall define the private type
+\texttt{Message\_ID}. It shall be structured so that it can contain an
+RFC~2822 message-id.
+
+The package shall provide the following utility functions to manage
+message ID objects:
+
+\begin{description}
+
+\item[\texttt{To\_Message\_ID}] This function shall take an encoded
+  string representing an RFC~2822 message-id and return a message
+  ID type object constructed from the input.
+
+\item[\texttt{Get\_Message\_ID}] This function shall take a message ID
+  object and return a string representation.
+
+\item[\texttt{Generate\_Message\_ID}] This function shall return a
+  Message ID object containing a randomly-generated fully RFC~2822
+  compliant message-id string.
+
+\end{description}
+
+\subsubsection{Lists of Addresses and Message IDs}
+
+The library shall contain two packages:
+
+\begin{itemize}
+\item\texttt{Basil.Addresses.Lists}
+\item\texttt{Basil.Message\_IDs.Lists}
+\end{itemize}
+
+These packages shall both contain a \texttt{list} object which, in
+each package, shall implement a list of addresses and message IDs,
+respectively. The list objects shall have all the properties and
+support all the operations of the Ada \texttt{Doubly\_Linked\_List}
+container.
+
+In addition, both packages shall contain a \texttt{Parse} function and
+a \texttt{Compile} function. These functions are described in more
+detail below.
+
+\subsubsection{The \texttt{Parse} Functions}
+
+An implementation of this function shall be included in the
+\texttt{Address.Lists} package, and another in the
+\texttt{Messages\_IDs.Lists} package. They shall take as input a
+header object containing a structured value of their respective object
+type. For instance, the implementation for address lists may be
+given a message's ``From'' header. They shall produce as output a list
+of address objects or message ID objects.
+
+Comments shall not be considered significant, and the functions need
+only decompose the structured values to the extent required to
+populate their respective objects. For instance,
+\texttt{Address.Lists.Parse} needs only to parse a ``From'' header to
+the point where it can extract a display name and address for each
+item.
+
+Exceptions that may be raised by these functions include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Structured\_Header}] This exception shall be
+  raised if the structured header is invalid and can not be parsed.
+
+\end{description}
+
+\subsubsection{The \texttt{Compile} Functions}
+
+As with the the \texttt{Parse} functions above, there shall be a
+\texttt{Compile} function implemented in both the
+\texttt{Address.Lists} and the \texttt{Message\_IDs.Lists}
+package. The \texttt{Compile} functions shall take as input a list of
+objects of their respective object types and an encoded string
+representing a header value. The shall return a header object with the
+key and a fully compliant string representation of the list as the
+value. So, for instance, the implementation for address lists may be
+given a list of addresses and the key encoded string ``From,'' and
+return a header object representing a fully compliant structured
+``From'' message header.
+
+Exceptions that may be raised by this procedure include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Character}] This exception shall be raised if
+  illegal characters exist in the input list. The passed key must be
+  encoded but address and message ID objects may contain illegal
+  characters if they were built using the \texttt{Parse} function from
+  an entity built with the \texttt{From\_String} function.
+
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                          DATES PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Structured Headers: Dates}
+
+The purpose of the \texttt{Basil.Dates} package is to provide a means
+of translation between the Ada Calendar and the RFC~2822 date
+structured header format. To that end, it shall provide two functions,
+as above, a \texttt{Parse} function and a \texttt{Compile}
+function. Because it will use the \texttt{Time} type from the Ada
+Calendar, there is no need for a new type definition. Also because no
+header stores multiple dates, there is no need for a list object.
+
+\subsubsection{The \texttt{Parse} Function}
+
+This function shall take as input a header object with a valid
+structured RFC~2822 date as its value. It shall return a Time object
+from the Ada Calendar representing the date in the header.
+
+Exceptions that may be raised by these functions include:
+
+\begin{description}
+
+\item[\texttt{Invalid\_Structured\_Header}] This exception shall be
+  raised if the structured header is invalid and can not be parsed.
+
+\end{description}
+
+\subsubsection{The \texttt{Compile} Function}
+
+This function shall take a Time object from the Ada Calendar, and an
+encoded string representing a header key. It shall return a header
+object with the key set to the string, and the value set to an
+RFC~2822 compliant structured date representation of the Time object.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%%                     CONTENT_TYPES PACKAGE
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{The \texttt{Basil.Content\_Types} Package}
+
+\subsubsection{The \texttt{Content\_Type} Type}
+\label{sr:content-types}
+
+The purpose of this type is to contain MIME type, subtype, and content
+transfer encoding information for a given entity. For text type
+entities it shall also contain character set information. It shall
+have a discriminate on the MIME type choosing between the following
+enumerations for the subtypes:
+
+\begin{tabbing}
+\texttt{Experimental\_Content\_Subtype}\hspace{.5in}\= \kill
+
+\texttt{Application\_Content\_Subtype}\>
+\texttt{Model\_Content\_Subtype}\\
+\texttt{Audio\_Content\_Subtype}\>
+\texttt{Multipart\_Content\_Subtype}\\
+\texttt{Experimental\_Content\_Subtype}\>
+\texttt{Text\_Content\_Subtype}\\
+\texttt{Image\_Content\_Subtype}\>
+\texttt{Unknown\_Content\_Subtype}\\
+\texttt{Message\_Content\_Subtype}\>
+\texttt{Video\_Content\_Subtype}\\
+\end{tabbing}
+
+Each subtype enumeration shall be populated with the values specified
+by IANA.\footnote{http://www.iana.org/assignments/media-types/} The
+additional experimental content subtype shall be selected when the
+type begins with an ``x-'' or ``X-'' and shall contain the components
+``experimental'' and ``unknown.'' In order to handle improperly formed
+content types that are not registered with IANA and also not prefixed
+with ``x-'' or ``X-'', the type and each subtype enumeration shall
+include an ``unknown'' identifier. The unknown content subtype shall
+contain one enumeration for ``unknown.''
+
+There shall also be a discriminant on the type to provide a character
+set component enumeration for ``text'' type entities.
+
+The character set enumeration shall contain an identifier for each
+character set identified by IANA,% 
+\footnote{http://www.iana.org/assignments/character-sets} plus a
+character set named ``unknown'' for character set names which fail to
+parse. For the enumeration names, the identifier designated ``MIME
+Preferred'' should be used, unless there is no designation, in which
+case the ``Name'' shall be used. 
+
+The content transfer encoding enumeration shall contain identifiers
+for all values specified by RFC~2045, plus ``experimental'' for
+encodings that begin with ``x-'' or ``X-'', plus ``unknown'' for encoding
+names which fail to parse.
+
+\subsubsection{MIME Type to Enumeration Translation}
+\label{sr:mime-to-enumeration-translation}
+
+The package shall be constructed to allow round-trip compatibility
+between the Ada enumeration identifier and the IANA name of the content
+type. Unfortunately, MIME type definitions allow characters that are
+not allowed in Ada enumeration identifiers. To provide consistent
+round-trip translation, this package will have a consistent means of
+translation.
+
+Major MIME types {``Audio,''} {``Text,''} etc, shall be prefixed with
+the string {``T\_''} when translating to an enumeration. Subtypes
+shall be prefixed with the string {``ST\_''}. Within the type name
+portion of the identifier, hyphen characters {``-''} shall be replaced
+with an underscore character, {``\_'',} plus characters {``+''} shall
+be replaced with the sequence {``\_P\_'',} and the dot character ``.''
+shall be replaced with the sequence {``\_D\_''.} Should a dot or plus
+character occur at the end of an identifier, the trailing newline
+shall be dropped.
+
+Hyphens, plus signs, and dots are currently the only characters
+present in the IANA approved MIME subtype definitions, and none end
+with a hyphen, or with a {``-P'}' or {``-D'',} which would render this
+translation scheme ambiguous. Should IANA approve a content type name
+that can not be represented by this scheme, this document will need to
+be amended. Any amendment must be backwards compatible with this
+scheme, and the identifiers of existing types and subtypes shall never
+change.
+
+Both Ada and MIME names are case insensitive, so case is not a factor
+in translation, but in translating from enumeration to MIME type
+names, one should replace all capital characters with lowercase
+characters.  
+
+\subsubsection{Character Set Name to Enumeration Translation}
+
+IANA character set to enumeration translation must be done using a
+mapping, as each character set has many aliases, so we can not provide
+``round trip'' translation between the character set name and the
+enumeration name; the translation procedure will have to be more
+complex. There is, therefore, no advantage in encoding enough
+information in the enumeration name to translate back into a valid
+IANA name, and no need for a rigorous rubric for translation. All that
+is required is an enumeration identifier that is unique and
+representative of the of the IANA designation.
+
+Character set names shall generally be translated to enumerations by
+changing any characters not allowed in Ada names into underscores, but
+if further translation is needed the implementer may take whatever
+steps necessary without impact on this specification, provided the
+translation results in a name that is both unique and representative
+of the IANA designation. 
+
+\end{document}

@@ -1,0 +1,55 @@
+Time-stamp: <2008-07-16 12:34:16 jordanb>
+
+                    BASIL MESSAGE HANDLING LIBRARY
+                    
+                            Build Tools
+
+This directory contains a set of files to ensure that the Basil
+library is up-to-date with the registry of MIME content types and
+character sets maintained by IANA.
+
+SUBTYPE DEFINITION GENERATION:
+
+The files,
+
+generate_all_subtypes.sh,
+generate_subtype.py, and
+content_subtypes_skeleton.ads
+
+are used to produce the content subtype definitions stored in
+../generated. If everything goes well, it should be sufficient to run
+generate_all_subtypes.sh. Please note that you need wget, html2text,
+and python installed. You also need a web connection with access to
+fetch the files from IANA.
+
+The file scraping in generate_subtype.py is rather brittle. Hopefully
+IANA won't find it necessary to change the format, but if they do that
+file will likely need changed.
+
+The file
+
+rm_generated_files.sh
+
+is provided to delete the generated files from ../generated/.
+
+CHARACTER SET VERIFICATION:
+
+The files,
+
+check_character_sets.sh,
+check_character_sets.py, and
+check_character_sets.adb
+
+are used to verify that every name and alias for a character set
+recognized by IANA is recognized by the Basil library. The Ada program
+takes the name or alias and searches for it in basil's character set
+database. The python program uses urllib to fetch the database from
+IANA and strip out all of the alias and character set names, and pipe
+them into the Ada program. The shell script builds the Ada file, runs
+the Python program, then cleans up the build of the Ada program. This
+might be tedious if you want to run it multiple times, but useful for
+automated building.
+
+Again, it should be sufficient to run check_character_sets.sh.
+
+ -- Jordan Bettis <jordanb@hafd.org>
